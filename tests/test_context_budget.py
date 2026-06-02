@@ -5,7 +5,7 @@ Pins the pure budget computation and the explicit-override detection.
 
 import json
 
-from src.context_budget import compute_input_token_budget, DEFAULT_HARD_MAX
+from src.context_budget import compute_input_token_budget, safe_hard_max, DEFAULT_HARD_MAX
 
 
 def test_default_scales_to_context_window():
@@ -52,6 +52,24 @@ def test_configurable_hard_max_lowers_ceiling():
 def test_hard_max_ignored_when_explicit_budget_set():
     # The explicit branch ignores hard_max entirely (#1272 no-op note).
     assert compute_input_token_budget(6000, 1_000_000, explicit=True, hard_max=50_000) == 6000
+
+
+def test_safe_hard_max_coerces_malformed_settings():
+    # A malformed/missing/non-positive setting must fall back, never raise (#1272 review).
+    assert safe_hard_max("huge") == DEFAULT_HARD_MAX
+    assert safe_hard_max(None) == DEFAULT_HARD_MAX
+    assert safe_hard_max("") == DEFAULT_HARD_MAX
+    assert safe_hard_max(0) == DEFAULT_HARD_MAX
+    assert safe_hard_max(-5) == DEFAULT_HARD_MAX
+    # Valid values (int or numeric string) pass through.
+    assert safe_hard_max(500_000) == 500_000
+    assert safe_hard_max("500000") == 500_000
+
+
+def test_safe_hard_max_flows_into_budget_for_malformed_setting():
+    # End-to-end: a malformed hard_max yields the default ceiling, not a crash.
+    hm = safe_hard_max("not-a-number")
+    assert compute_input_token_budget(6000, 1_000_000, explicit=False, hard_max=hm) == DEFAULT_HARD_MAX
 
 
 def test_is_setting_overridden_reads_raw_saved_file(tmp_path, monkeypatch):

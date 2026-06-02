@@ -1487,7 +1487,7 @@ async def stream_agent_loop(
     _t3 = time.time()
     try:
         from src.context_compactor import trim_for_context
-        from src.context_budget import compute_input_token_budget
+        from src.context_budget import compute_input_token_budget, safe_hard_max
         from src.settings import is_setting_overridden
 
         soft_budget = int(get_setting("agent_input_token_budget", 6000) or 0)
@@ -1497,11 +1497,12 @@ async def stream_agent_loop(
             # Scale the default budget to the model's context window so long-context
             # models aren't silently capped at 6000; an explicit user setting is
             # still honoured (clamped to the window). (#1170)
+            # safe_hard_max defends the hot path against a malformed setting (#1272).
             effective_budget = compute_input_token_budget(
                 soft_budget,
                 context_length,
                 is_setting_overridden("agent_input_token_budget"),
-                hard_max=int(get_setting("agent_input_token_hard_max", 200000) or 200000),
+                hard_max=safe_hard_max(get_setting("agent_input_token_hard_max", 200000)),
             )
             trimmed_messages = trim_for_context(
                 messages,

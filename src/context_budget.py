@@ -18,6 +18,17 @@ DEFAULT_BUDGET = 6000
 DEFAULT_HEADROOM = 0.85
 
 
+def safe_hard_max(raw) -> int:
+    """Coerce a configured hard-max value to a positive int, falling back to
+    DEFAULT_HARD_MAX for missing, non-int, or <= 0 values. A malformed setting
+    (e.g. "huge") must never raise in the hot stream path (#1272 review)."""
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_HARD_MAX
+    return value if value > 0 else DEFAULT_HARD_MAX
+
+
 def compute_input_token_budget(
     configured: int,
     context_length: int,
